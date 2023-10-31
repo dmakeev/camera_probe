@@ -37,6 +37,9 @@ class _MediaInfoState extends State<MediaInfo> {
 
   _getInfo() {
     final trackSettings = widget.videoTrack.getSettings();
+    print(widget.videoTrack);
+    // Rprint(widget.videoTrack.);
+    print(trackSettings);
     widget._mediaInfo = """
           width: ${trackSettings['width']}
           height: ${trackSettings['height']}

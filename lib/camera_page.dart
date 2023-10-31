@@ -11,7 +11,7 @@ class CameraPage extends StatefulWidget {
   String? selectedCameraId;
   List<MediaDeviceInfo> cameraList = [];
   MediaStream? stream;
-  RTCVideoRenderer renderer = RTCVideoRenderer();
+  late RTCVideoRenderer renderer;
 
   @override
   State<CameraPage> createState() => _CameraPageState();
@@ -22,9 +22,6 @@ class _CameraPageState extends State<CameraPage> {
   initState() {
     super.initState();
 
-    // Init video renderer
-    widget.renderer.initialize();
-
     navigator.mediaDevices.getUserMedia({'audio': true, 'video': true}).then((stream) {
       stream.getTracks().forEach((track) => track.stop());
     }).catchError((error, st) {
@@ -33,17 +30,25 @@ class _CameraPageState extends State<CameraPage> {
       print(st);
     });
 
-    final eq = const ListEquality().equals;
+    // Init video renderer
+    widget.renderer = RTCVideoRenderer();
+    widget.renderer.initialize();
+
     // Check the device list periodically
     Timer.periodic(const Duration(seconds: 3), (timer) {
       navigator.mediaDevices.enumerateDevices().then((deviceList) {
+        // Print all devices
         // deviceList.forEach((device) => print(device.kind));
         // Get only video input devioces
         deviceList.retainWhere((device) => device.kind == 'videoinput');
-        // print('>>> 3');
-        //print(deviceList);
+        // Print all filtered video devices
+        // deviceList.forEach((device) => print(device.kind));
         // Check if the device list is changed
-        final equal = eq(widget.cameraList.map((d) => d.deviceId).toList(), deviceList.map((d) => d.deviceId).toList());
+        final oldDevices = widget.cameraList.map((d) => d.deviceId).toList();
+        oldDevices.sort();
+        final newDevices = deviceList.map((d) => d.deviceId).toList();
+        newDevices.sort();
+        final equal = oldDevices.equals(newDevices);
         if (!equal) {
           setState(() {
             widget.selectedCameraId = null;
@@ -62,11 +67,15 @@ class _CameraPageState extends State<CameraPage> {
       }
     };
 
-    Helper.openCamera(mediaConstraints).then((stream) {
-      setState(() {
-        widget.stream = stream;
-        widget.renderer.srcObject = stream;
-      });
+    navigator.mediaDevices.getUserMedia(mediaConstraints).then((stream) {
+      final track = stream.getTracks().first;
+      print(
+          'Setting video track: id: ${track.id},  kind: ${track.kind}, enabled: ${track.enabled} , muted: ${track.muted}');
+      widget.stream = stream;
+      widget.renderer.srcObject = stream;
+      widget.renderer.setSrcObject(stream: stream, trackId: track.id);
+
+      setState(() {});
     }).catchError((error, st) {
       print('GETTING VIDEO ERROR: $error');
     });
@@ -108,9 +117,24 @@ class _CameraPageState extends State<CameraPage> {
                 'Camera list is loading...',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
+            const SizedBox(height: 24),
+            SizedBox(
+                width: 320,
+                height: 240,
+                child: RTCVideoView(
+                  widget.renderer,
+                  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                  filterQuality: FilterQuality.none,
+                  placeholderBuilder: (BuildContext context) {
+                    return Container(
+                      color: Colors.grey,
+                      child: const Center(
+                        child: Text('Waiting for the video...'),
+                      ),
+                    );
+                  },
+                )),
             if (widget.stream != null) ...[
-              const SizedBox(height: 24),
-              SizedBox(width: 320, height: 240, child: RTCVideoView(widget.renderer)),
               const SizedBox(height: 24),
               MediaInfo(videoTrack: widget.stream!.getVideoTracks().first)
             ],
